@@ -139,6 +139,9 @@
               (.setText duration-label d)
               (.setText item-label (str i))
               (copy! (str d \tab i)))
+            (catch AssertionError e
+              (.setText duration-label "invalid")
+              (.setText item-label ""))
             (catch Exception e
               (.setText duration-label "invalid")
               (.setText item-label ""))))))
@@ -146,6 +149,6 @@
       (.setLayout (GridLayout. 2 3 3 3))
       (.add times-label) (.add start-text) (.add end-text)
       (.add convert-button) (.add duration-label) (.add item-label)
-      (.setSize 400 100) (.setVisible true))))
+      (.setSize 400 100) (.setLocation 960 540) (.setVisible true))))
 
 #_(quick-ui)
