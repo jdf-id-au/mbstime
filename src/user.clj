@@ -39,7 +39,7 @@
   "Return upper time threshold in minutes. Case-insensitive."
   [s]
   (let [[_ _ just-min h m]
-        (->> s (re-find #"(?i).* to ((\d\d) minutes|(\d?\d):(\d\d) hours?)"))]
+        (re-find #"(?i).* to ((\d\d) minutes|(\d?\d):(\d\d) hours?)" s)]
     (cond
       just-min (Integer/parseInt just-min)
       (and h m) (+ (* (Integer/parseInt h) 60) (Integer/parseInt m)))))
@@ -68,13 +68,27 @@
         t (int24h->min to)]
     (if (< f t) (- t f) (- (+ t (* 24 60)) f))))
 
-(defn times->item
-  [from to]
-  (let [d (duration from to)]
-    (assert (<= d (* 24 60)))
-    (->> time-cutoffs
-      (drop-while (fn [[cutoff item]] (< cutoff d)))
-      first
-      val)))
+(defn min->str [d]
+  (let [h (quot d 60)
+        m (rem d 60)]
+    (format "%d:%02d" h m)))
 
-#_(times->item 1000 1645)
+#_(min->str 1439)
+
+(defn item [duration]
+  {:pre [(<= duration (* 24 60))]}  
+  (->> time-cutoffs
+    (drop-while (fn [[cutoff item]] (< cutoff duration)))
+    first
+    val))
+
+(defn duration+item
+  [from to]
+  (let [d (duration from to)
+        i (item d)
+        s (min->str d)]
+    [s i]))
+
+(def d+i duration+item)
+
+#_ (d+i 1100 2330)
