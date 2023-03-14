@@ -7,7 +7,7 @@
              JComponent KeyStroke AbstractAction)
            (javax.swing.event ChangeListener)
            (java.awt GridLayout)
-           (java.awt.event ActionListener KeyEvent)
+           (java.awt.event ActionListener KeyEvent FocusListener)
            (java.awt.datatransfer StringSelection)))
 
 (def mbs "MBS-XML-20230301-v2.XML")
@@ -125,30 +125,28 @@
 
 (defn quick-ui []
   (let [frame (JFrame. "MBS time calc")
-        times-label (JLabel. "Times")
         start-text (JTextField.)
         end-text (JTextField.)
-        convert-button (JButton. "Calc + copy")
         duration-label (JLabel. "")
-        item-label (JLabel. "")]
-    (.addActionListener convert-button
-      (reify ActionListener
-        (actionPerformed [this evt]
-          (try
-            (let [[d i] (duration+item (.getText start-text) (.getText end-text))]
-              (.setText duration-label d)
-              (.setText item-label (str i))
-              (copy! (str d \tab i)))
-            (catch AssertionError e
-              (.setText duration-label "invalid")
-              (.setText item-label ""))
-            (catch Exception e
-              (.setText duration-label "invalid")
-              (.setText item-label ""))))))
+        item-label (JLabel. "")
+        invalid #(do (.setText duration-label "invalid")
+                     (.setText item-label ""))
+        calculate #(try
+                     (let [[d i] (duration+item (.getText start-text) (.getText end-text))]
+                       (.setText duration-label d)
+                       (.setText item-label (str i))
+                       (copy! (str d \tab i)))
+                     (catch AssertionError e (invalid))
+                     (catch Exception e (invalid)))
+        focus-listener (reify FocusListener
+                         (focusLost [this evt]
+                           (calculate)))]
+    (.addFocusListener start-text focus-listener)
+    (.addFocusListener end-text focus-listener)
     (doto frame
-      (.setLayout (GridLayout. 2 3 3 3))
-      (.add times-label) (.add start-text) (.add end-text)
-      (.add convert-button) (.add duration-label) (.add item-label)
+      (.setLayout (GridLayout. 2 2 10 10))
+      (.add start-text) (.add end-text)
+      (.add duration-label) (.add item-label)
       (.setSize 400 100) (.setLocation 960 540) (.setVisible true))))
 
 #_(quick-ui)
