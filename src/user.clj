@@ -2,7 +2,13 @@
   (:require [clojure.java.io :as io]
             [clojure.data.xml :as xml]
             [clojure.walk :as walk]
-            [clojure.test :refer [with-test is]]))
+            [clojure.test :refer [with-test is]])
+  (:import (javax.swing JFrame JLabel JTextField JButton
+             JComponent KeyStroke AbstractAction)
+           (javax.swing.event ChangeListener)
+           (java.awt GridLayout)
+           (java.awt.event ActionListener KeyEvent)
+           (java.awt.datatransfer StringSelection)))
 
 (def mbs "MBS-XML-20230301-v2.XML")
 
@@ -68,21 +74,20 @@
     (let [x (Integer/parseInt s 10)
           h (quot x 100)
           m (rem x 100)]
-      (assert (< m 60))
+      (assert (and (< m 60) (<= h 24)))
       (+ (* h 60) m)))
   (is (= (str24h->min "0101") 61)))
 
 (with-test
   (defn duration
     "Case duration in minutes.
-    Times as string \"0000-2222\". Can span midnight."
+    24h times as string like \"0829\". Can span midnight."
     ;; Separate function could detect "unsocial hours" but would need date.
-    [s]
-    (let [[_ f t] (re-find #"(\d{4})-(\d{4})" s)
-          [f t] (map str24h->min [f t])]
+    [fs ts]
+    (let [[f t] (map str24h->min [fs ts])]
       (if (< f t) (- t f) (- (+ t (* 24 60)) f))))
-  (is (= (duration "0000-1023") 623))
-  (is (= (duration "2304-0200") 176)))
+  (is (= (duration "0000" "1023") 623))
+  (is (= (duration "2304" "0200") 176)))
 
 (with-test
   (defn min->str [d]
@@ -100,11 +105,47 @@
 
 (with-test
   (defn duration+item
-    [s]
-    (let [d (duration s)
+    [fs ts]
+    (let [d (duration fs ts)
           i (item d)
           s (min->str d)]
       [s i]))
-  (is (= (duration+item "1100-2330") ["12:30" 23670])))
+  (is (= (duration+item "1100" "2330") ["12:30" 23670])))
 
 (def d+i duration+item)
+
+;; from jdf/comfort
+(defn clipboard []
+  (.getSystemClipboard (java.awt.Toolkit/getDefaultToolkit)))
+(defn copy!
+  "Copy to system clipboard."
+  [text]
+  (let [selection (StringSelection. text)]
+    (.setContents (clipboard) selection selection)))
+
+(defn quick-ui []
+  (let [frame (JFrame. "MBS time calc")
+        times-label (JLabel. "Times")
+        start-text (JTextField.)
+        end-text (JTextField.)
+        convert-button (JButton. "Calc + copy")
+        duration-label (JLabel. "")
+        item-label (JLabel. "")]
+    (.addActionListener convert-button
+      (reify ActionListener
+        (actionPerformed [this evt]
+          (try
+            (let [[d i] (duration+item (.getText start-text) (.getText end-text))]
+              (.setText duration-label d)
+              (.setText item-label (str i))
+              (copy! (str d \tab i)))
+            (catch Exception e
+              (.setText duration-label "invalid")
+              (.setText item-label ""))))))
+    (doto frame
+      (.setLayout (GridLayout. 2 3 3 3))
+      (.add times-label) (.add start-text) (.add end-text)
+      (.add convert-button) (.add duration-label) (.add item-label)
+      (.setSize 400 100) (.setVisible true))))
+
+#_(quick-ui)
