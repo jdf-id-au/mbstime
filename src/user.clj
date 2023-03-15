@@ -3,9 +3,10 @@
             [clojure.data.xml :as xml]
             [clojure.walk :as walk]
             [clojure.test :refer [with-test is]])
-  (:import (javax.swing JFrame JLabel JTextField JButton
+  (:import (javax.swing JFrame JPanel JLabel JTextField JButton
              JComponent KeyStroke AbstractAction)
            (javax.swing.event ChangeListener)
+           (javax.swing.border EmptyBorder)
            (java.awt GridLayout)
            (java.awt.event ActionListener KeyEvent FocusListener)
            (java.awt.datatransfer StringSelection)))
@@ -40,17 +41,15 @@
                     [tag (first content)]))]]
       [(Integer/parseInt item-num) item-data])))
 
-(def time-descriptions
-  (comp
-    (filter (fn [[k v]] (< 23000 k 25000)))
-    (map (fn [[k {:keys [Description]}]] [k Description]))))
+(def time-items (filter (fn [[k v]] (< 23000 k 25000))))
+(def descriptions (map (fn [[k {:keys [Description]}]] [k Description])))
 
 (with-test
   (defn parse-desc
     "Return upper time threshold in minutes. Case-insensitive."
     [s]
     (let [[_ _ just-min h m]
-          (re-find #"(?i).* to ((\d\d) minutes|(\d?\d):(\d\d) hours?)" s)]
+          (re-find #"(?i) to ((\d\d) minutes|(\d?\d):(\d\d) hours?)" s)]
       (cond
         just-min (Integer/parseInt just-min)
         (and h m) (+ (* (Integer/parseInt h) 60) (Integer/parseInt m)))))
@@ -65,9 +64,23 @@
       [(parse-desc v) k])))
 
 (def time-cutoffs
-  (memoize (fn [f] (->> f parse item-numbers (eduction time-descriptions) time-cutoffs-impl))))
+  (memoize (fn [f] (->> f parse item-numbers
+                     (eduction time-items descriptions)
+                     time-cutoffs-impl))))
 
-#_(->> "MBS-XML-20230301-v2.XML" time-cutoffs time)
+#_(->> mbs time-cutoffs time)
+
+(def all-descriptions
+  (memoize (fn [f] (->> f parse item-numbers (eduction descriptions)))))
+
+(defn search-descriptions [s]
+  (let [re (re-pattern (str "(?i)" s))]
+    (filter (fn [[i d]] (re-find re d)) (all-descriptions mbs))))
+#_ (search-descriptions "anaesthesia .* abdo")
+
+(defn section-descriptions [x]
+  (filter (fn [[i d]] (= (quot x 100) (quot i 100))) (all-descriptions mbs)))
+#_ (section-descriptions 20770)
 
 (with-test
   (defn str24h->min [s]
@@ -124,7 +137,9 @@
     (.setContents (clipboard) selection selection)))
 
 (defn quick-ui []
-  (let [frame (JFrame. "MBS time calc")
+  (let [space 10
+        frame (JFrame. "MBS time calc")
+        inset (JPanel.)
         start-text (JTextField.)
         end-text (JTextField.)
         duration-label (JLabel. "")
@@ -139,14 +154,17 @@
                      (catch AssertionError e (invalid))
                      (catch Exception e (invalid)))
         focus-listener (reify FocusListener
+                         (focusGained [this evt])
                          (focusLost [this evt]
                            (calculate)))]
     (.addFocusListener start-text focus-listener)
     (.addFocusListener end-text focus-listener)
-    (doto frame
-      (.setLayout (GridLayout. 2 2 10 10))
+    (doto inset
+      (.setBorder (EmptyBorder. space space space space))
+      (.setLayout (GridLayout. 2 2 space space))
       (.add start-text) (.add end-text)
-      (.add duration-label) (.add item-label)
-      (.setSize 400 100) (.setLocation 960 540) (.setVisible true))))
+      (.add duration-label) (.add item-label))
+    (doto frame
+      (.setSize 400 100) (.setLocation 960 540) (.add inset) (.setVisible true))))
 
 #_(quick-ui)
